@@ -1,0 +1,53 @@
+import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
+import java.util.Base64;
+
+public class SimpleSymmetricEncryption {
+
+    // Erzeugt einen neuen geheimen Schlüssel
+    public static SecretKey generateKey(int n) throws Exception {
+        KeyGenerator keyGenerator = KeyGenerator.getInstance("AES");
+        keyGenerator.init(n);
+        SecretKey secretKey = keyGenerator.generateKey();
+        return secretKey;
+    }
+
+    // Verschlüsselt einen Text mit einem gegebenen Schlüssel
+    public static String encrypt(String plainText, SecretKey secretKey) throws Exception {
+        Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
+        cipher.init(Cipher.ENCRYPT_MODE, secretKey);
+        byte[] encryptedText = cipher.doFinal(plainText.getBytes("UTF-8"));
+        return Base64.getEncoder().encodeToString(encryptedText);
+    }
+
+    // Entschlüsselt einen Text mit einem gegebenen Schlüssel
+    public static String decrypt(String encryptedText, SecretKey secretKey) throws Exception {
+        Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
+        cipher.init(Cipher.DECRYPT_MODE, secretKey);
+        byte[] decryptedText = cipher.doFinal(Base64.getDecoder().decode(encryptedText));
+        return new String(decryptedText);
+    }
+
+    public static void main(String[] args) {
+        try {
+            // Generierung eines 128-Bit AES-Schlüssels
+            SecretKey secretKey = generateKey(128);
+
+            String originalText = "Dies ist ein geheimer Text";
+            System.out.println("Originaltext: " + originalText);
+
+            // Verschlüsselung des Textes
+            String encryptedText = encrypt(originalText, secretKey);
+            System.out.println("Verschlüsselter Text: " + encryptedText);
+
+            // Entschlüsselung des Textes
+            String decryptedText = decrypt(encryptedText, secretKey);
+            System.out.println("Entschlüsselter Text: " + decryptedText);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
