@@ -1,53 +1,120 @@
-import javax.crypto.Cipher;
-import javax.crypto.KeyGenerator;
-import javax.crypto.SecretKey;
-import javax.crypto.spec.SecretKeySpec;
+package org.example;
+
 import java.util.Base64;
 
-public class SimpleSymmetricEncryption {
+public class CustomSymmetricEncryption {
 
-    // Erzeugt einen neuen geheimen Schlüssel
-    public static SecretKey generateKey(int n) throws Exception {
-        KeyGenerator keyGenerator = KeyGenerator.getInstance("AES");
-        keyGenerator.init(n);
-        SecretKey secretKey = keyGenerator.generateKey();
-        return secretKey;
+    private static final int BLOCK_SIZE = 8; // Blockgröße in Zeichen
+    private static final int ROUNDS = 4; // Anzahl der Runden
+
+    // Umcodieren des Klartexts
+    public static String encodePlainText(String plainText) {
+        StringBuilder encoded = new StringBuilder();
+        for (char c : plainText.toCharArray()) {
+            encoded.append((char) (c + 3)); // Verschiebung der Zeichen um 3
+        }
+        return encoded.toString();
     }
 
-    // Verschlüsselt einen Text mit einem gegebenen Schlüssel
-    public static String encrypt(String plainText, SecretKey secretKey) throws Exception {
-        Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
-        cipher.init(Cipher.ENCRYPT_MODE, secretKey);
-        byte[] encryptedText = cipher.doFinal(plainText.getBytes("UTF-8"));
-        return Base64.getEncoder().encodeToString(encryptedText);
+    // Aufteilen des Klartexts in Blöcke mit Padding
+    public static String[] splitIntoBlocks(String text) {
+        // Padding hinzufügen
+
+        int modulo = text.length() % BLOCK_SIZE; //Berechnet wie viele Zeichen der Text über oder unter der Blockgröße liegt
+        int paddingLength = BLOCK_SIZE - modulo;
+        if (paddingLength == BLOCK_SIZE) paddingLength = 0; // Kein Padding, wenn der Text exakt passt
+
+        for (int i = 0; i < paddingLength; i++) {
+            text += "\n";
+        }
+
+        //berechnet wie viele Blöcke es nach dem Padding gibt
+        int blockCount = text.length() / BLOCK_SIZE;
+        String[] blocks = new String[blockCount];
+        for (int i = 0; i < blockCount; i++) {
+            int start = i * BLOCK_SIZE;
+            blocks[i] = text.substring(start, start + BLOCK_SIZE);
+        }
+        return blocks;
     }
 
-    // Entschlüsselt einen Text mit einem gegebenen Schlüssel
-    public static String decrypt(String encryptedText, SecretKey secretKey) throws Exception {
-        Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
-        cipher.init(Cipher.DECRYPT_MODE, secretKey);
-        byte[] decryptedText = cipher.doFinal(Base64.getDecoder().decode(encryptedText));
-        return new String(decryptedText);
+    // Permutation eines Blocks (einfaches Vertauschen der Zeichenpositionen)
+    public static String permuteBlock(String block) {
+        char[] permutedBlock = new char[block.length()];
+        int[] permutationPattern = {2, 0, 3, 1, 6, 4, 7, 5}; // Beispiel für ein Muster
+        for (int i = 0; i < block.length(); i++) {
+            permutedBlock[i] = block.charAt(permutationPattern[i]);
+        }
+        return new String(permutedBlock);
+    }
+
+    // Verschlüsseln eines Blocks mit Permutation und Substitution
+    public static String encryptBlock(String block, String key) {
+        StringBuilder encryptedBlock = new StringBuilder();
+        for (int round = 0; round < ROUNDS; round++) {
+            block = permuteBlock(block); // Permutation des Blocks
+            for (int i = 0; i < block.length(); i++) {
+                char c = block.charAt(i);
+                char k = key.charAt(i % key.length());
+                encryptedBlock.append((char) (c ^ k)); // XOR mit Schlüssel als Substitution
+            }
+            block = encryptedBlock.toString(); // Ergebnis für die nächste Runde verwenden
+            encryptedBlock.setLength(0);
+        }
+        return block;
+    }
+
+    // Funktion übernimmt gesamte Verschlüsselung des Klartexts
+    public static String encrypt(String plainText, String key) {
+        plainText = encodePlainText(plainText); // Umcodieren des Klartexts
+        String[] blocks = splitIntoBlocks(plainText); // Aufteilen in Blöcke mit Padding
+        StringBuilder encryptedText = new StringBuilder();
+        for (String block : blocks) {
+            encryptedText.append(encryptBlock(block, key)); // Blockweise Verschlüsselung mit dem Schlüssel
+        }
+        return Base64.getEncoder().encodeToString(encryptedText.toString().getBytes());
+    }
+
+    // Entschlüsselungsroutine (ähnlich wie Verschlüsselung, aber umgekehrt)
+    public static String decrypt(String encryptedText, String key) {
+        byte[] decodedBytes = Base64.getDecoder().decode(encryptedText.getBytes());
+        String decodedText = new String(decodedBytes);
+        String[] blocks = splitIntoBlocks(decodedText);
+        StringBuilder decryptedText = new StringBuilder();
+        for (String block : blocks) {
+            decryptedText.append(encryptBlock(block, key)); // Entschlüsselung ist hier symmetrisch
+        }
+        var unpadded = removePadding(decryptedText.toString());
+
+        return decodePlainText(unpadded);
+    }
+
+    // Entfernen des Paddings nach der Entschlüsselung
+    public static String removePadding(String text) {
+        return  text.trim();
+    }
+
+    // Dekodieren des Klartexts
+    public static String decodePlainText(String encodedText) {
+        StringBuilder decoded = new StringBuilder();
+        for (char c : encodedText.toCharArray()) {
+            decoded.append((char) (c - 3)); // Rückverschiebung der Zeichen um 3
+        }
+        return decoded.toString();
     }
 
     public static void main(String[] args) {
-        try {
-            // Generierung eines 128-Bit AES-Schlüssels
-            SecretKey secretKey = generateKey(128);
+        String originalText = "Das ist ein Geheimtext";
+        String key = "Schluessel"; // Einfache Schlüsselphrase
 
-            String originalText = "Dies ist ein geheimer Text";
-            System.out.println("Originaltext: " + originalText);
+        System.out.println("Originaltext: " + originalText);
 
-            // Verschlüsselung des Textes
-            String encryptedText = encrypt(originalText, secretKey);
-            System.out.println("Verschlüsselter Text: " + encryptedText);
+        // Verschlüsselung des Textes
+        String encryptedText = encrypt(originalText, key);
+        System.out.println("Verschlüsselter Text: " + encryptedText);
 
-            // Entschlüsselung des Textes
-            String decryptedText = decrypt(encryptedText, secretKey);
-            System.out.println("Entschlüsselter Text: " + decryptedText);
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        // Entschlüsselung des Textes
+        String decryptedText = decrypt(encryptedText, key);
+        System.out.println("Entschlüsselter Text: " + decryptedText);
     }
 }
